@@ -1,30 +1,21 @@
 import React, { useState, useEffect } from "react";
+import { HueDevice, Status } from "../../types/HueDevice";
+import Lights from "../lights/Lights";
 import "./App.css";
-
-interface HueDevice {
-  id: string;
-  internalipaddress: string;
-  link?: string;
-  status?: Status;
-}
-
-enum Status {
-  LOADING = "STATUS_LOADING",
-  OK = "STATUS_OK",
-  NOT_OK = "STATUS_NOT_OK",
-}
 
 function App() {
   const [devices, setDevices] = useState<HueDevice[]>([]);
   const [readyToTestLinks, setReadyToTestLinks] = useState(false);
+  const [selectedDevice, setSelectedDevice] = useState<HueDevice>();
 
   useEffect(() => {
     fetch("https://discovery.meethue.com/")
       .then((response) => response.json() as Promise<HueDevice[]>)
+      .then((hueDevices) => hueDevices.filter((hd) => hd.internalipaddress))
       .then((hueDevices) =>
-        hueDevices.map((hueDevice: HueDevice) => ({
-          ...hueDevice,
-          link: `https://${hueDevice.internalipaddress}/debug/clip.html`,
+        hueDevices.map((hd: HueDevice) => ({
+          ...hd,
+          link: `https://${hd.internalipaddress}/debug/clip.html`,
           status: Status.LOADING,
         }))
       )
@@ -32,8 +23,6 @@ function App() {
         setDevices(x);
         setReadyToTestLinks(true);
       });
-
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -51,14 +40,31 @@ function App() {
             .then((device) => {
               console.log(device.status);
               setDevices((currentDevices) => [
-                ...currentDevices.filter((x) => x.id !== device.id),
                 device,
+                ...currentDevices.filter((x) => x.id !== device.id),
               ]);
             })
         );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [readyToTestLinks]);
+
+  const mapToColor = (status?: Status) => {
+    switch (status) {
+      case Status.LOADING: {
+        return "grey";
+      }
+      case Status.OK: {
+        return "green";
+      }
+      case Status.NOT_OK: {
+        return "red";
+      }
+      default: {
+        return "black";
+      }
+    }
+  };
 
   return (
     <div>
@@ -67,16 +73,22 @@ function App() {
         {devices &&
           devices.map((x) => (
             <li>
-              <p>
+              <p style={{ color: mapToColor(x.status) }}>
                 <span>{x.id}</span>:{" "}
                 <a target="blank" href={x.link}>
                   {x.link}
                 </a>{" "}
                 <span>{x.status}</span>
+                {x.status === Status.OK && (
+                  <button onClick={() => setSelectedDevice(x)}>
+                    Select Device
+                  </button>
+                )}
               </p>
             </li>
           ))}
       </ul>
+      {selectedDevice && <Lights hueDevice={selectedDevice}></Lights>}
     </div>
   );
 }
